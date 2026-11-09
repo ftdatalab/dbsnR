@@ -8,6 +8,8 @@
 #'
 #' @return A list containing classes, attributes and coded domains.
 #'
+#' @importFrom rlang .data
+#'
 #' @export
 dbsn_catalog <- function(layer = NULL) {
 

@@ -22,4 +22,5 @@ BugReports: https://github.com/filippotani/dbsnR/issues
 Depends: 
     R (>= 3.5)
 Imports: 
-    dplyr
+    dplyr,
+    rlang
