@@ -1,0 +1,577 @@
+---
+title: "DBSN workflow with dbsnR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{DBSN workflow with dbsnR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+# Introduction
+
+`dbsnR` provides tools to download, inspect, merge, filter, select, crop,
+and export spatial data from the Italian Database di Sintesi Nazionale
+(DBSN).
+
+This vignette presents a complete workflow, from provincial DBSN
+geodatabases stored in the local cache to a compact GeoPackage covering
+a specific study area.
+
+```{r}
+library(dbsnR)
+library(sf)
+```
+
+# Download provincial datasets
+
+DBSN datasets can be downloaded and stored in the local `dbsnR` cache.
+
+For example:
+
+```{r}
+dbsn_download("RI")
+dbsn_download("AQ")
+dbsn_download("RM")
+```
+
+Once downloaded, the datasets remain available in the local cache and
+can be reused without downloading them again.
+
+The following workflow assumes that the required provincial datasets
+are already available in the cache.
+
+# Define the provinces
+
+In this example, the analysis uses Rieti and the surrounding provinces.
+
+```{r}
+provinces <- c(
+  "RI",
+  "AP",
+  "AQ",
+  "PG",
+  "RM",
+  "TE",
+  "TR",
+  "VT"
+)
+```
+
+# Explore available DBSN layers
+
+`dbsn_layers()` inspects the geodatabases available in the local cache
+without loading all spatial features into memory.
+
+```{r}
+layers <- dbsn_layers(
+  province = provinces
+)
+
+head(layers)
+```
+
+The returned catalogue contains information such as:
+
+- layer name;
+- geometry type;
+- number of provinces where the layer exists;
+- province codes.
+
+A detailed catalogue with one row for each layer/province combination
+can also be requested.
+
+```{r}
+layers_detail <- dbsn_layers(
+  province = provinces,
+  details = TRUE
+)
+
+head(layers_detail)
+```
+
+# Inspect a DBSN layer
+
+Before loading a potentially large spatial dataset, `dbsn_info()` can
+be used to inspect a specific layer.
+
+For example:
+
+```{r}
+dbsn_info(
+  "bosco",
+  province = provinces
+)
+```
+
+This reports the number of features available for each province and
+indicates whether the layer contains data.
+
+This is particularly useful because a DBSN layer may exist inside a
+provincial geodatabase while containing zero features.
+
+For example:
+
+```{r}
+dbsn_info(
+  "cascata",
+  province = provinces
+)
+```
+
+`dbsn_info()` distinguishes between available, empty, unavailable, and
+unreadable layers.
+
+# Merge provincial datasets
+
+A single DBSN layer can be loaded and merged across several provinces.
+
+```{r}
+loc_sg <- dbsn_merge(
+  layer = "loc_sg",
+  province = provinces
+)
+```
+
+The output is an `sf` object.
+
+`dbsn_merge()` also adds information about the origin of each feature,
+including the province and source geodatabase.
+
+```{r}
+table(loc_sg$province)
+```
+
+The coordinate reference system can be inspected normally with `sf`.
+
+```{r}
+st_crs(loc_sg)
+```
+
+# Merge all available layers
+
+When the `layer` argument is omitted, `dbsn_merge()` processes all
+available DBSN layers.
+
+```{r}
+dbsn <- dbsn_merge(
+  province = provinces
+)
+```
+
+The result is a named list of `sf` objects.
+
+```{r}
+names(dbsn)
+```
+
+Each element corresponds to one DBSN layer.
+
+For example:
+
+```{r}
+dbsn$loc_sg
+dbsn$bosco
+dbsn$tr_str
+```
+
+The number of features in each merged layer can be inspected with:
+
+```{r}
+sapply(dbsn, nrow)
+```
+
+# Filter features by attributes
+
+`dbsn_filter()` filters the features of an individual `sf` layer while
+preserving its geometry.
+
+For example, features belonging only to Rieti can be selected with:
+
+```{r}
+rieti <- dbsn_filter(
+  loc_sg,
+  province = "RI"
+)
+```
+
+Multiple values can be supplied for the same attribute.
+
+```{r}
+rieti_aquila <- dbsn_filter(
+  loc_sg,
+  province = c("RI", "AQ")
+)
+```
+
+Values within the same attribute are interpreted as alternatives.
+
+Conditions involving different attributes are combined.
+
+```{r}
+selected <- dbsn_filter(
+  loc_sg,
+  province = "RI",
+  loc_sg_sgn = c("01", "04")
+)
+```
+
+Character comparisons can also be made case-insensitive.
+
+```{r}
+selected <- dbsn_filter(
+  loc_sg,
+  loc_sg_top = "montasola",
+  ignore_case = TRUE
+)
+```
+
+# Select thematic layers
+
+A complete DBSN dataset can contain many layers.
+
+`dbsn_select()` extracts only the layers required for a particular
+analysis.
+
+For example:
+
+```{r}
+territory <- dbsn_select(
+  x = dbsn,
+  layers = c(
+    "loc_sg",
+    "edifc",
+    "tr_str",
+    "el_vms",
+    "bosco",
+    "cl_agr",
+    "scarpt"
+  )
+)
+```
+
+The selected layers can be inspected with:
+
+```{r}
+names(territory)
+```
+
+and their number of features with:
+
+```{r}
+sapply(territory, nrow)
+```
+
+Working with only the required thematic layers can considerably reduce
+the amount of spatial data that must be processed during subsequent
+analyses.
+
+# Define a study point
+
+A study location can be represented using geographic coordinates.
+
+For example:
+
+```{r}
+study_point <- st_sfc(
+  st_point(
+    c(12.9, 42.13)
+  ),
+  crs = 4326
+)
+```
+
+The coordinates are specified as:
+
+```text
+longitude, latitude
+```
+
+In this example, the input coordinates use WGS84 (`EPSG:4326`).
+
+# Create a study area
+
+`dbsn_buffer()` creates an area around an `sf` or `sfc` spatial object.
+
+For example, a study area extending 20 km around the point can be
+created with:
+
+```{r}
+study_area <- dbsn_buffer(
+  x = study_point,
+  distance = 20000
+)
+```
+
+The distance is expressed in metres.
+
+When geographic coordinates are supplied, `dbsn_buffer()` transforms
+the input to a projected coordinate reference system before calculating
+the buffer.
+
+The resulting geometry can be inspected with:
+
+```{r}
+study_area
+st_crs(study_area)
+```
+
+# Crop a single DBSN layer
+
+`dbsn_crop()` can crop an individual `sf` object.
+
+```{r}
+loc_sg_crop <- dbsn_crop(
+  x = loc_sg,
+  area = study_area
+)
+```
+
+The effect of the crop can be inspected by comparing the number of
+features.
+
+```{r}
+nrow(loc_sg)
+nrow(loc_sg_crop)
+```
+
+# Crop multiple DBSN layers
+
+`dbsn_crop()` can also operate directly on the named list produced by
+`dbsn_select()` or `dbsn_merge()`.
+
+```{r}
+territory_crop <- dbsn_crop(
+  x = territory,
+  area = study_area
+)
+```
+
+The number of retained features can then be inspected for every layer.
+
+```{r}
+sapply(territory_crop, nrow)
+```
+
+A useful comparison is:
+
+```{r}
+data.frame(
+  layer = names(territory),
+  before = sapply(territory, nrow),
+  after = sapply(territory_crop, nrow)
+)
+```
+
+# Intersecting versus clipping
+
+By default, `dbsn_crop()` uses:
+
+```{r}
+method = "intersects"
+```
+
+This retains complete features whenever they intersect the study area.
+
+For example, a road entering the study area is kept as a complete
+feature.
+
+If geometries must instead be physically cut at the study-area
+boundary, use:
+
+```{r}
+territory_clip <- dbsn_crop(
+  x = territory,
+  area = study_area,
+  method = "clip"
+)
+```
+
+This distinction makes it possible to choose between feature selection
+and exact geometric clipping depending on the analysis.
+
+# Cropping with a bounding box
+
+A rectangular area can also be defined directly using longitude and
+latitude.
+
+```{r}
+area <- st_bbox(
+  c(
+    xmin = 12.8,
+    ymin = 42.0,
+    xmax = 13.2,
+    ymax = 42.4
+  ),
+  crs = st_crs(4326)
+)
+```
+
+The bounding box can then be supplied directly to `dbsn_crop()`.
+
+```{r}
+loc_sg_bbox <- dbsn_crop(
+  x = loc_sg,
+  area = area
+)
+```
+
+The cropping area is automatically transformed to the coordinate
+reference system of the DBSN layer.
+
+# Export spatial layers
+
+The final dataset can be exported using `dbsn_export()`.
+
+A named list of `sf` objects is written to a single GeoPackage, with
+each list element becoming a separate GeoPackage layer.
+
+```{r}
+dbsn_export(
+  x = territory_crop,
+  file = "study_area_dbsn.gpkg"
+)
+```
+
+The resulting GeoPackage can be opened directly in GIS software such
+as QGIS.
+
+Existing files are protected by default.
+
+To replace an existing GeoPackage explicitly:
+
+```{r}
+dbsn_export(
+  x = territory_crop,
+  file = "study_area_dbsn.gpkg",
+  overwrite = TRUE
+)
+```
+
+A single `sf` object can also be exported.
+
+```{r}
+dbsn_export(
+  x = loc_sg_crop,
+  file = "loc_sg_study_area.gpkg",
+  layer = "loc_sg"
+)
+```
+
+# Complete workflow
+
+The complete workflow can be written compactly as follows.
+
+```{r}
+library(dbsnR)
+library(sf)
+
+# Provinces
+
+provinces <- c(
+  "RI",
+  "AP",
+  "AQ",
+  "PG",
+  "RM",
+  "TE",
+  "TR",
+  "VT"
+)
+
+# Merge DBSN data
+
+dbsn <- dbsn_merge(
+  province = provinces
+)
+
+# Select thematic layers
+
+territory <- dbsn_select(
+  x = dbsn,
+  layers = c(
+    "loc_sg",
+    "edifc",
+    "tr_str",
+    "el_vms",
+    "bosco",
+    "cl_agr",
+    "scarpt"
+  )
+)
+
+# Define study point
+
+study_point <- st_sfc(
+  st_point(
+    c(12.9, 42.13)
+  ),
+  crs = 4326
+)
+
+# Create 20 km study area
+
+study_area <- dbsn_buffer(
+  x = study_point,
+  distance = 20000
+)
+
+# Crop selected DBSN layers
+
+territory_crop <- dbsn_crop(
+  x = territory,
+  area = study_area
+)
+
+# Inspect result
+
+sapply(territory_crop, nrow)
+
+# Export to GeoPackage
+
+dbsn_export(
+  x = territory_crop,
+  file = "study_area_dbsn.gpkg"
+)
+```
+
+# Workflow overview
+
+The principal `dbsnR` spatial workflow is therefore:
+
+```text
+dbsn_download()
+       |
+       v
+dbsn_layers()
+       |
+       v
+dbsn_info()
+       |
+       v
+dbsn_merge()
+       |
+       v
+dbsn_filter() / dbsn_select()
+       |
+       v
+dbsn_buffer()
+       |
+       v
+dbsn_crop()
+       |
+       v
+dbsn_export()
+```
+
+This workflow makes it possible to move from provincial DBSN
+geodatabases stored in the local cache to a compact spatial dataset
+containing only the thematic layers and geographic area required for
+an analysis.
