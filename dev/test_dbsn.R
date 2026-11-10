@@ -9,6 +9,7 @@ options(download.file.method = "wininet")
 devtools::document()
 devtools::load_all()
 devtools::load_all("~/dbsnR")
+devtools::check()
 devtools::test()
 devtools::build()
 
@@ -18,3 +19,5 @@ loc_sg <- dbsn_catalog("loc_sg")
 
 
 dbsn_cache_path("RI", create = TRUE)
+
+sources <- dbsn_sources(verify_ssl = FALSE)

@@ -22,8 +22,11 @@ BugReports: https://github.com/filippotani/dbsnR/issues
 Depends: 
     R (>= 3.5)
 Imports: 
+    curl,
     dplyr,
-    rlang
+    rlang,
+    xml2
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+LazyData: true
