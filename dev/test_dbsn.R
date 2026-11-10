@@ -98,3 +98,15 @@ dbsn_export(
   x = territorio_cut,
   file = "output/orvinio_dbsn.gpkg"
 )
+
+loc_sg_decoded <- dbsn_decode(
+  x = loc_sg,
+  layer = "loc_sg",
+  attributes = c(
+    "loc_sg_ty",
+    "loc_sg_sgn",
+    "meta_ist"
+  )
+)
+
+
