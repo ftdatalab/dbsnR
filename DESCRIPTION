@@ -25,6 +25,7 @@ Imports:
     curl,
     dplyr,
     rlang,
+    sf,
     xml2
 Suggests: 
     testthat (>= 3.0.0)
