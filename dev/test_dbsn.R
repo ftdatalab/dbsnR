@@ -11,6 +11,7 @@ devtools::load_all()
 devtools::load_all("~/dbsnR")
 devtools::check()
 devtools::test()
+devtools::build_readme()
 devtools::build()
 
 #--> tests
