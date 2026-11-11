@@ -31,7 +31,7 @@ loc_sg <- dbsn_merge("loc_sg")
 
 area <- sf::st_bbox(
   c(
-    xmin = 12.8,  # longitudine Ovest
+    xmin = 12.8,  # longitudine Ovesthttp://127.0.0.1:25713/graphics/b96439bd-dece-48a5-8d12-58e04d9bc4fd.png
     ymin = 42.3,  # latitudine Sud
     xmax = 13.1,  # longitudine Est
     ymax = 42.4   # latitudine Nord
