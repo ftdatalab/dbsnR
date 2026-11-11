@@ -464,7 +464,33 @@ dbsn_export(
   layer = "loc_sg"
 )
 ```
+## Locate features along a line
 
+`dbsn_along()` locates spatial features along a reference line. Features are
+projected onto the line and their position is calculated from the start of
+the line.
+
+```{r, eval=FALSE}
+along <- dbsn_along(
+  line = road,
+  objects = loc_sg
+)
+
+along[, c(
+  "distance_m",
+  "distance_km",
+  "distance_pct"
+)]
+```
+
+The function adds three attributes:
+
+- `distance_m`: distance from the start of the line in metres;
+- `distance_km`: distance from the start of the line in kilometres;
+- `distance_pct`: relative position along the line from 0 to 100.
+
+The direction of the reference line determines the origin of the measurement:
+0 represents the start of the LINESTRING and 100 represents its end.
 # Complete workflow
 
 The complete workflow can be written compactly as follows.
