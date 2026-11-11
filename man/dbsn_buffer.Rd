@@ -2,27 +2,53 @@
 % Please edit documentation in R/buffer.R
 \name{dbsn_buffer}
 \alias{dbsn_buffer}
-\title{Create a buffer around a spatial object}
+\title{Create a buffer around DBSN spatial features}
 \usage{
 dbsn_buffer(x, distance, crs = NULL, dissolve = TRUE)
 }
 \arguments{
 \item{x}{An sf or sfc object.}
 
-\item{distance}{Buffer distance in metres.}
+\item{distance}{Positive numeric value specifying the buffer distance
+in metres.}
 
-\item{crs}{Optional projected CRS used to calculate the buffer.
-If NULL, EPSG:6875 (RDN2008 / Italy zone) is used for geographic
-coordinates.}
+\item{crs}{Optional projected CRS used internally for the buffer
+calculation. If NULL and \code{x} uses geographic coordinates,
+EPSG:6875 is used.}
 
-\item{dissolve}{Logical. If TRUE, overlapping buffers are merged
-into a single geometry.}
+\item{dissolve}{Logical. If TRUE, all buffer geometries are dissolved
+into one feature. If FALSE, individual buffers and their attributes
+are retained.}
 }
 \value{
-An sf object containing the buffer geometry.
+An sf object containing the buffer geometries.
+
+The returned object uses the same CRS as the original input \code{x}.
 }
 \description{
-Creates a buffer of a specified distance around an sf or sfc object.
-Geographic coordinates are automatically transformed to a projected
-CRS before buffering.
+Creates a buffer around an sf or sfc object using a distance expressed
+in metres.
+}
+\details{
+If the input data use geographic coordinates, the geometry is temporarily
+transformed to a projected metric CRS for the buffer calculation and the
+result is then transformed back to the original CRS.
+
+By default, EPSG:6875 (RDN2008 / Italy zone (N-E)) is used as the metric
+CRS when the input uses longitude/latitude coordinates.
+}
+\examples{
+\dontrun{
+buffer <- dbsn_buffer(
+  x,
+  distance = 500
+)
+
+buffer <- dbsn_buffer(
+  x,
+  distance = 1000,
+  dissolve = FALSE
+)
+}
+
 }
