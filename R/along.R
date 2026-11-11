@@ -31,7 +31,7 @@
 #' converted to representative points using `sf::st_point_on_surface()`.
 #'
 #' The position along the line is calculated with
-#' `sf::st_line_locate_point()`.
+#' `sf::st_line_project()` using normalized distances.
 #'
 #' @examples
 #' \dontrun{
@@ -395,9 +395,10 @@ dbsn_along <- function(line, objects) {
     function(i) {
 
       as.numeric(
-        sf::st_line_locate_point(
+        sf::st_line_project(
           line_geom,
-          points[i]
+          points[i],
+          normalized = TRUE
         )
       )
     },

@@ -41,7 +41,7 @@ POINT geometries are used directly. Other supported geometry types are
 converted to representative points using \code{sf::st_point_on_surface()}.
 
 The position along the line is calculated with
-\code{sf::st_line_locate_point()}.
+\code{sf::st_line_project()} using normalized distances.
 }
 \examples{
 \dontrun{
