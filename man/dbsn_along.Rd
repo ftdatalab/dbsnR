@@ -2,85 +2,61 @@
 % Please edit documentation in R/along.R
 \name{dbsn_along}
 \alias{dbsn_along}
-\title{Locate features along a linear route}
+\title{Locate features along a line}
 \usage{
-dbsn_along(x, objects, max_distance = Inf, sort = FALSE, quiet = FALSE)
+dbsn_along(line, objects)
 }
 \arguments{
-\item{x}{An sf or sfc object containing one LINESTRING or
-MULTILINESTRING route.}
+\item{line}{An \code{sf} object containing exactly one LINESTRING or
+MULTILINESTRING feature.}
 
-\item{objects}{An sf object containing the features to locate along
-the route.}
-
-\item{max_distance}{Optional maximum lateral distance in metres.
-Features farther than this distance are returned with \code{along_fraction},
-\code{along_m}, \code{along_km}, and \code{distance_m} set to NA.
-Default is Inf.}
-
-\item{sort}{Logical. If TRUE, the result is ordered by increasing
-distance along the route.}
-
-\item{quiet}{Logical. If FALSE, displays information about the
-calculation.}
+\item{objects}{An \code{sf} object containing the features to locate along
+the line.}
 }
 \value{
-An sf object containing the original geometries and attributes of
-\code{objects}, with four additional columns:
+The original \code{objects} object with three additional columns:
 \itemize{
-\item \code{along_fraction}: relative position along the route, from 0 to 1;
-\item \code{along_m}: distance along the route in metres;
-\item \code{along_km}: distance along the route in kilometres;
-\item \code{distance_m}: shortest lateral distance between the feature
-and the route, in metres.
+\item \code{distance_m}: distance from the start of the line in metres.
+\item \code{distance_km}: distance from the start of the line in kilometres.
+\item \code{distance_pct}: position along the line as percentage of its
+total length.
 }
 }
 \description{
-Calculates the position of spatial features along a linear route.
+Calculates the position of spatial features along a reference line.
 }
 \details{
-For each feature in \code{objects}, the function identifies the nearest point
-on the route and calculates:
-\itemize{
-\item the distance travelled along the route from its starting point;
-\item the lateral distance between the feature and the route.
-}
+Each feature in \code{objects} is converted to a representative point when
+necessary and projected onto the nearest position of \code{line}.
 
-The direction of the route is important. The along-route distance is
-measured from the first vertex of the input line to its last vertex.
+The output contains the distance from the start of the line in metres,
+kilometres, and as a percentage of the total line length.
 
-If the input data use geographic coordinates, calculations are performed
-internally in EPSG:6875 (RDN2008 / Italy zone (N-E)). The original
-geometries, attributes, and CRS of \code{objects} are preserved.
+The reference line must use a projected coordinate reference system.
 
-Multiple route features in \code{x} are combined before the calculation.
-The resulting geometry must form one continuous LINESTRING.
+If \code{objects} uses a different CRS, it is automatically transformed to
+the CRS of \code{line}.
 
-The position along the route is calculated by projecting the nearest
-route point onto the segments of the LINESTRING and measuring the
-cumulative segment length from the first route vertex.
+POINT geometries are used directly. Other supported geometry types are
+converted to representative points using \code{sf::st_point_on_surface()}.
 
-The original geometries in \code{objects} are not modified.
-
-If \code{x} contains multiple connected line features, their order and
-orientation after merging may differ from the original input order.
-For an unambiguous progression direction, a single ordered LINESTRING
-is recommended.
+The position along the line is calculated with
+\code{sf::st_line_locate_point()}.
 }
 \examples{
 \dontrun{
 
-located_sites <- dbsn_along(
-  route,
-  archaeological_sites
+result <- dbsn_along(
+  line = test_road,
+  objects = loc_sg
 )
 
-located_sites <- dbsn_along(
-  route,
-  archaeological_sites,
-  max_distance = 500,
-  sort = TRUE
-)
+result[, c(
+  "distance_m",
+  "distance_km",
+  "distance_pct"
+)]
+
 }
 
 }
