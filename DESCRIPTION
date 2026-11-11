@@ -1,6 +1,6 @@
 Package: dbsnR
 Title: Tools for Reading and Managing Italian DBSN Geospatial Data
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R:
     person(
         given = "Filippo",
