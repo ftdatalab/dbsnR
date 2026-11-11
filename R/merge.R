@@ -3,21 +3,73 @@
 #' Searches the local dbsnR cache for provincial File Geodatabases
 #' and merges equal layers across one or more provinces.
 #'
+#' Merge results can optionally be saved as RDS files. Subsequent calls
+#' with the same provinces, layers, and options can load the cached merge
+#' instead of reading the provincial geodatabases again.
+#'
 #' @param layer Character vector with the layer names to merge.
 #'   If NULL, all available layers are merged separately.
+#'
 #' @param province Character vector with province codes, for example
-#'   c("RI", "AQ", "TE"). If NULL, all provinces available in the
+#'   `c("RI", "AQ", "TE")`. If NULL, all provinces available in the
 #'   cache are used.
+#'
 #' @param cache_dir Optional path to the dbsnR datasets cache.
 #'   If NULL, the default dbsnR cache is used.
+#'
 #' @param add_source Logical. If TRUE, adds the columns `province`
 #'   and `source_gdb`.
+#'
+#' @param cache Logical. If TRUE, merge results are stored as RDS files
+#'   and reused in subsequent calls with the same parameters.
+#'
+#' @param overwrite Logical. If TRUE, an existing cached merge is ignored
+#'   and replaced with a newly calculated merge.
+#'
 #' @param quiet Logical. If FALSE, progress messages are displayed.
 #'
 #' @return
 #' If a single layer is requested, an sf object.
+#'
 #' If multiple layers are requested or `layer = NULL`, a named list
 #' of sf objects.
+#'
+#' @details
+#' Cached merge files are stored in the `merged` directory next to the
+#' DBSN `datasets` cache.
+#'
+#' The cache filename identifies:
+#' \itemize{
+#'   \item the selected provinces;
+#'   \item the selected layers;
+#'   \item whether source columns were added.
+#' }
+#'
+#' Use `overwrite = TRUE` after updating provincial source data or when
+#' a merge must be recalculated.
+#'
+#' @examples
+#' \dontrun{
+#' loc_sg <- dbsn_merge(
+#'   layer = "loc_sg",
+#'   province = c(
+#'     "AP", "AQ", "PG", "RI",
+#'     "RM", "TE", "TR", "VT"
+#'   ),
+#'   cache = TRUE
+#' )
+#'
+#' merged <- dbsn_merge(
+#'   province = c("RI", "AQ", "TE"),
+#'   cache = TRUE
+#' )
+#'
+#' merged <- dbsn_merge(
+#'   province = c("RI", "AQ", "TE"),
+#'   cache = TRUE,
+#'   overwrite = TRUE
+#' )
+#' }
 #'
 #' @export
 dbsn_merge <- function(
@@ -25,16 +77,69 @@ dbsn_merge <- function(
     province = NULL,
     cache_dir = NULL,
     add_source = TRUE,
+    cache = TRUE,
+    overwrite = FALSE,
     quiet = FALSE
 ) {
 
   # ---------------------------------------------------------------------------
-  # 1. Identify cache directory
+  # 1. Validate options
+  # ---------------------------------------------------------------------------
+
+  if (
+    !is.logical(add_source) ||
+    length(add_source) != 1L ||
+    is.na(add_source)
+  ) {
+    stop(
+      "`add_source` must be TRUE or FALSE.",
+      call. = FALSE
+    )
+  }
+
+  if (
+    !is.logical(cache) ||
+    length(cache) != 1L ||
+    is.na(cache)
+  ) {
+    stop(
+      "`cache` must be TRUE or FALSE.",
+      call. = FALSE
+    )
+  }
+
+  if (
+    !is.logical(overwrite) ||
+    length(overwrite) != 1L ||
+    is.na(overwrite)
+  ) {
+    stop(
+      "`overwrite` must be TRUE or FALSE.",
+      call. = FALSE
+    )
+  }
+
+  if (
+    !is.logical(quiet) ||
+    length(quiet) != 1L ||
+    is.na(quiet)
+  ) {
+    stop(
+      "`quiet` must be TRUE or FALSE.",
+      call. = FALSE
+    )
+  }
+
+
+  # ---------------------------------------------------------------------------
+  # 2. Identify datasets cache directory
   # ---------------------------------------------------------------------------
 
   if (is.null(cache_dir)) {
 
-    local_appdata <- Sys.getenv("LOCALAPPDATA")
+    local_appdata <- Sys.getenv(
+      "LOCALAPPDATA"
+    )
 
     if (nzchar(local_appdata)) {
 
@@ -47,7 +152,10 @@ dbsn_merge <- function(
     } else {
 
       cache_dir <- file.path(
-        tools::R_user_dir("dbsnR", which = "cache"),
+        tools::R_user_dir(
+          "dbsnR",
+          which = "cache"
+        ),
         "datasets"
       )
     }
@@ -69,7 +177,34 @@ dbsn_merge <- function(
 
 
   # ---------------------------------------------------------------------------
-  # 2. Find provinces available in cache
+  # 3. Define merged cache directory
+  # ---------------------------------------------------------------------------
+
+  merged_cache_dir <- file.path(
+    dirname(cache_dir),
+    "merged"
+  )
+
+  if (cache && !dir.exists(merged_cache_dir)) {
+
+    created <- dir.create(
+      merged_cache_dir,
+      recursive = TRUE,
+      showWarnings = FALSE
+    )
+
+    if (!created && !dir.exists(merged_cache_dir)) {
+      stop(
+        "Unable to create the merged cache directory:\n",
+        merged_cache_dir,
+        call. = FALSE
+      )
+    }
+  }
+
+
+  # ---------------------------------------------------------------------------
+  # 4. Find provinces available in cache
   # ---------------------------------------------------------------------------
 
   province_dirs <- list.dirs(
@@ -85,11 +220,13 @@ dbsn_merge <- function(
     )
   }
 
-  available_provinces <- basename(province_dirs)
+  available_provinces <- basename(
+    province_dirs
+  )
 
 
   # ---------------------------------------------------------------------------
-  # 3. Select requested provinces
+  # 5. Select requested provinces
   # ---------------------------------------------------------------------------
 
   if (is.null(province)) {
@@ -98,14 +235,19 @@ dbsn_merge <- function(
 
   } else {
 
-    if (!is.character(province) || length(province) == 0L) {
+    if (
+      !is.character(province) ||
+      length(province) == 0L
+    ) {
       stop(
         "`province` must be NULL or a non-empty character vector.",
         call. = FALSE
       )
     }
 
-    province <- unique(toupper(province))
+    province <- unique(
+      toupper(province)
+    )
 
     missing_provinces <- setdiff(
       province,
@@ -115,7 +257,10 @@ dbsn_merge <- function(
     if (length(missing_provinces) > 0L) {
       warning(
         "The following provinces were not found in the cache: ",
-        paste(missing_provinces, collapse = ", "),
+        paste(
+          missing_provinces,
+          collapse = ", "
+        ),
         call. = FALSE
       )
     }
@@ -132,36 +277,48 @@ dbsn_merge <- function(
     )
   }
 
+  selected_provinces <- sort(
+    unique(
+      toupper(selected_provinces)
+    )
+  )
+
   province_dirs <- province_dirs[
-    basename(province_dirs) %in% selected_provinces
+    toupper(basename(province_dirs)) %in%
+      selected_provinces
   ]
 
 
   # ---------------------------------------------------------------------------
-  # 4. Find File Geodatabases
+  # 6. Find File Geodatabases
   # ---------------------------------------------------------------------------
 
   gdb_paths <- unlist(
-    lapply(province_dirs, function(x) {
+    lapply(
+      province_dirs,
+      function(x) {
 
-      dirs <- list.dirs(
-        path = x,
-        recursive = FALSE,
-        full.names = TRUE
-      )
-
-      dirs[
-        grepl(
-          "\\.gdb$",
-          dirs,
-          ignore.case = TRUE
+        dirs <- list.dirs(
+          path = x,
+          recursive = FALSE,
+          full.names = TRUE
         )
-      ]
-    }),
+
+        dirs[
+          grepl(
+            "\\.gdb$",
+            dirs,
+            ignore.case = TRUE
+          )
+        ]
+      }
+    ),
     use.names = FALSE
   )
 
-  gdb_paths <- sort(unique(gdb_paths))
+  gdb_paths <- sort(
+    unique(gdb_paths)
+  )
 
   if (length(gdb_paths) == 0L) {
     stop(
@@ -184,14 +341,18 @@ dbsn_merge <- function(
 
 
   # ---------------------------------------------------------------------------
-  # 5. Build layer catalogue
+  # 7. Build layer catalogue
   # ---------------------------------------------------------------------------
 
   gdb_catalogue <- lapply(
     gdb_paths,
     function(gdb_path) {
 
-      province_code <- basename(dirname(gdb_path))
+      province_code <- toupper(
+        basename(
+          dirname(gdb_path)
+        )
+      )
 
       layer_names <- tryCatch(
 
@@ -243,11 +404,13 @@ dbsn_merge <- function(
 
 
   # ---------------------------------------------------------------------------
-  # 6. Determine layers to merge
+  # 8. Determine layers to merge
   # ---------------------------------------------------------------------------
 
   available_layers <- sort(
-    unique(gdb_catalogue$layer)
+    unique(
+      gdb_catalogue$layer
+    )
   )
 
   merge_all <- is.null(layer)
@@ -258,7 +421,10 @@ dbsn_merge <- function(
 
   } else {
 
-    if (!is.character(layer) || length(layer) == 0L) {
+    if (
+      !is.character(layer) ||
+      length(layer) == 0L
+    ) {
       stop(
         "`layer` must be NULL or a non-empty character vector.",
         call. = FALSE
@@ -275,7 +441,10 @@ dbsn_merge <- function(
     if (length(missing_layers) > 0L) {
       warning(
         "The following layers were not found: ",
-        paste(missing_layers, collapse = ", "),
+        paste(
+          missing_layers,
+          collapse = ", "
+        ),
         call. = FALSE
       )
     }
@@ -293,9 +462,101 @@ dbsn_merge <- function(
     )
   }
 
+  layers_to_merge <- sort(
+    unique(layers_to_merge)
+  )
+
 
   # ---------------------------------------------------------------------------
-  # 7. Internal function to merge one layer
+  # 9. Build merged-cache filename
+  # ---------------------------------------------------------------------------
+
+  province_key <- paste(
+    selected_provinces,
+    collapse = "_"
+  )
+
+  if (merge_all) {
+
+    layer_key <- "ALL"
+
+  } else {
+
+    layer_key <- paste(
+      layers_to_merge,
+      collapse = "_"
+    )
+  }
+
+  source_key <- if (add_source) {
+    "source"
+  } else {
+    "nosource"
+  }
+
+  cache_name <- paste(
+    "merged",
+    province_key,
+    layer_key,
+    source_key,
+    sep = "__"
+  )
+
+  cache_name <- gsub(
+    "[^A-Za-z0-9_.-]",
+    "_",
+    cache_name
+  )
+
+  cache_file <- file.path(
+    merged_cache_dir,
+    paste0(
+      cache_name,
+      ".rds"
+    )
+  )
+
+
+  # ---------------------------------------------------------------------------
+  # 10. Load existing cached merge
+  # ---------------------------------------------------------------------------
+
+  if (
+    cache &&
+    file.exists(cache_file) &&
+    !overwrite
+  ) {
+
+    if (!quiet) {
+      message(
+        "Loading cached merge:\n",
+        cache_file
+      )
+    }
+
+    cached_result <- tryCatch(
+
+      readRDS(cache_file),
+
+      error = function(e) {
+        stop(
+          "Unable to read the cached merge:\n",
+          cache_file,
+          "\n",
+          conditionMessage(e),
+          call. = FALSE
+        )
+      }
+    )
+
+    return(
+      cached_result
+    )
+  }
+
+
+  # ---------------------------------------------------------------------------
+  # 11. Internal function to merge one layer
   # ---------------------------------------------------------------------------
 
   merge_one_layer <- function(layer_name) {
@@ -337,15 +598,14 @@ dbsn_merge <- function(
 
         {
 
-          x <- sf::st_read(
+          object <- sf::st_read(
             dsn = gdb_path,
             layer = layer_name,
             quiet = TRUE,
             stringsAsFactors = FALSE
           )
 
-          # Skip empty layers
-          if (nrow(x) == 0L) {
+          if (nrow(object) == 0L) {
 
             if (!quiet) {
               message(
@@ -358,18 +618,18 @@ dbsn_merge <- function(
 
           if (add_source) {
 
-            x$province <- rep(
+            object$province <- rep(
               province_code,
-              nrow(x)
+              nrow(object)
             )
 
-            x$source_gdb <- rep(
+            object$source_gdb <- rep(
               basename(gdb_path),
-              nrow(x)
+              nrow(object)
             )
           }
 
-          x
+          object
         },
 
         error = function(e) {
@@ -390,7 +650,9 @@ dbsn_merge <- function(
     }
 
 
-    # Remove failed reads
+    # -------------------------------------------------------------------------
+    # Remove failed or empty reads
+    # -------------------------------------------------------------------------
 
     objects <- Filter(
       Negate(is.null),
@@ -422,22 +684,24 @@ dbsn_merge <- function(
 
       objects <- lapply(
         objects,
-        function(x) {
+        function(object) {
 
-          current_crs <- sf::st_crs(x)
+          current_crs <- sf::st_crs(
+            object
+          )
 
           if (
             !is.na(current_crs) &&
             current_crs != reference_crs
           ) {
 
-            x <- sf::st_transform(
-              x,
+            object <- sf::st_transform(
+              object,
               reference_crs
             )
           }
 
-          x
+          object
         }
       )
     }
@@ -458,7 +722,7 @@ dbsn_merge <- function(
 
 
   # ---------------------------------------------------------------------------
-  # 8. Merge selected layers
+  # 12. Merge selected layers
   # ---------------------------------------------------------------------------
 
   result <- lapply(
@@ -482,7 +746,7 @@ dbsn_merge <- function(
 
 
   # ---------------------------------------------------------------------------
-  # 9. Return result
+  # 13. Prepare returned object
   # ---------------------------------------------------------------------------
 
   if (
@@ -491,8 +755,51 @@ dbsn_merge <- function(
     length(result) == 1L
   ) {
 
-    return(result[[1]])
+    final_result <- result[[1]]
+
+  } else {
+
+    final_result <- result
   }
 
-  result
+
+  # ---------------------------------------------------------------------------
+  # 14. Save merge as RDS
+  # ---------------------------------------------------------------------------
+
+  if (cache) {
+
+    if (!quiet) {
+      message(
+        "Saving merged cache:\n",
+        cache_file
+      )
+    }
+
+    tryCatch(
+
+      saveRDS(
+        final_result,
+        file = cache_file,
+        compress = TRUE
+      ),
+
+      error = function(e) {
+        warning(
+          "Unable to save the merged cache:\n",
+          cache_file,
+          "\n",
+          conditionMessage(e),
+          call. = FALSE
+        )
+      }
+    )
+  }
+
+
+  # ---------------------------------------------------------------------------
+  # 15. Return result
+  # ---------------------------------------------------------------------------
+
+  final_result
 }

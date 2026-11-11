@@ -9,6 +9,8 @@ dbsn_merge(
   province = NULL,
   cache_dir = NULL,
   add_source = TRUE,
+  cache = TRUE,
+  overwrite = FALSE,
   quiet = FALSE
 )
 }
@@ -17,7 +19,7 @@ dbsn_merge(
 If NULL, all available layers are merged separately.}
 
 \item{province}{Character vector with province codes, for example
-c("RI", "AQ", "TE"). If NULL, all provinces available in the
+\code{c("RI", "AQ", "TE")}. If NULL, all provinces available in the
 cache are used.}
 
 \item{cache_dir}{Optional path to the dbsnR datasets cache.
@@ -26,14 +28,63 @@ If NULL, the default dbsnR cache is used.}
 \item{add_source}{Logical. If TRUE, adds the columns \code{province}
 and \code{source_gdb}.}
 
+\item{cache}{Logical. If TRUE, merge results are stored as RDS files
+and reused in subsequent calls with the same parameters.}
+
+\item{overwrite}{Logical. If TRUE, an existing cached merge is ignored
+and replaced with a newly calculated merge.}
+
 \item{quiet}{Logical. If FALSE, progress messages are displayed.}
 }
 \value{
 If a single layer is requested, an sf object.
+
 If multiple layers are requested or \code{layer = NULL}, a named list
 of sf objects.
 }
 \description{
 Searches the local dbsnR cache for provincial File Geodatabases
 and merges equal layers across one or more provinces.
+}
+\details{
+Merge results can optionally be saved as RDS files. Subsequent calls
+with the same provinces, layers, and options can load the cached merge
+instead of reading the provincial geodatabases again.
+
+Cached merge files are stored in the \code{merged} directory next to the
+DBSN \code{datasets} cache.
+
+The cache filename identifies:
+\itemize{
+\item the selected provinces;
+\item the selected layers;
+\item whether source columns were added.
+}
+
+Use \code{overwrite = TRUE} after updating provincial source data or when
+a merge must be recalculated.
+}
+\examples{
+\dontrun{
+loc_sg <- dbsn_merge(
+  layer = "loc_sg",
+  province = c(
+    "AP", "AQ", "PG", "RI",
+    "RM", "TE", "TR", "VT"
+  ),
+  cache = TRUE
+)
+
+merged <- dbsn_merge(
+  province = c("RI", "AQ", "TE"),
+  cache = TRUE
+)
+
+merged <- dbsn_merge(
+  province = c("RI", "AQ", "TE"),
+  cache = TRUE,
+  overwrite = TRUE
+)
+}
+
 }
