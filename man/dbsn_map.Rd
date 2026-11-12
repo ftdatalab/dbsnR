@@ -4,21 +4,57 @@
 \alias{dbsn_map}
 \title{Interactive map for sf objects}
 \usage{
-dbsn_map(x, basemap = "street", popup = NULL, hover = NULL)
+dbsn_map(
+  x,
+  basemap = "street",
+  popup = NULL,
+  hover = NULL,
+  color_by = NULL,
+  palette = "viridis",
+  legend = TRUE
+)
 }
 \arguments{
 \item{x}{An sf object.}
 
-\item{basemap}{One of:
-"street", "topo", or "satellite".}
+\item{basemap}{Basemap displayed below the spatial data.
+One of \code{"street"}, \code{"topo"}, or \code{"satellite"}.}
 
 \item{popup}{Optional column name used for popups.}
 
 \item{hover}{Optional column name used for hover labels.}
+
+\item{color_by}{Optional column name used to color features.
+Numeric columns use a continuous palette. Character, factor, and logical
+columns use a categorical palette.}
+
+\item{palette}{Color palette used when \code{color_by} is provided.
+Examples include \code{"viridis"}, \code{"magma"}, \code{"plasma"}, \code{"Blues"},
+\code{"YlOrRd"}, and \code{"Set2"}.}
+
+\item{legend}{Logical. If \code{TRUE}, displays a color legend when
+\code{color_by} is provided.}
 }
 \value{
 A leaflet map.
 }
 \description{
 Displays an sf object on an interactive leaflet map.
+}
+\details{
+The function automatically detects point, line, and polygon geometries.
+Features can optionally be colored using a numeric or categorical column.
+}
+\examples{
+\dontrun{
+dbsn_map(x)
+
+dbsn_map(
+  x,
+  basemap = "topo",
+  color_by = "quota",
+  hover = "quota"
+)
+}
+
 }
