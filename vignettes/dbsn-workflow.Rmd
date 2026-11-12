@@ -17,13 +17,17 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-`dbsnR` provides tools to download, inspect, merge, filter, select, crop,
-and export spatial data from the Italian Database di Sintesi Nazionale
-(DBSN).
+`dbsnR` provides a structured workflow to download, cache, inspect,
+merge, search, filter, crop, analyse, visualise, and export spatial data
+from the Italian Database di Sintesi Nazionale (DBSN).
+
+The package is designed to simplify repetitive operations across
+provincial DBSN geodatabases while keeping the resulting spatial
+objects compatible with the standard R spatial ecosystem.
 
 This vignette presents a complete workflow, from provincial DBSN
-geodatabases stored in the local cache to a compact GeoPackage covering
-a specific study area.
+datasets stored in the local cache to spatial analysis, interactive
+mapping, and export.
 
 ```{r}
 library(dbsnR)
@@ -44,6 +48,12 @@ dbsn_download("RM")
 
 Once downloaded, the datasets remain available in the local cache and
 can be reused without downloading them again.
+
+The cache location can be inspected with:
+
+```{r}
+dbsn_cache_dir()
+```
 
 The following workflow assumes that the required provincial datasets
 are already available in the cache.
@@ -102,8 +112,6 @@ head(layers_detail)
 Before loading a potentially large spatial dataset, `dbsn_info()` can
 be used to inspect a specific layer.
 
-For example:
-
 ```{r}
 dbsn_info(
   "bosco",
@@ -114,8 +122,8 @@ dbsn_info(
 This reports the number of features available for each province and
 indicates whether the layer contains data.
 
-This is particularly useful because a DBSN layer may exist inside a
-provincial geodatabase while containing zero features.
+A DBSN layer may exist inside a provincial geodatabase while containing
+zero features.
 
 For example:
 
@@ -140,7 +148,7 @@ loc_sg <- dbsn_merge(
 )
 ```
 
-The output is an `sf` object.
+The result is a standard `sf` object.
 
 `dbsn_merge()` also adds information about the origin of each feature,
 including the province and source geodatabase.
@@ -149,10 +157,35 @@ including the province and source geodatabase.
 table(loc_sg$province)
 ```
 
-The coordinate reference system can be inspected normally with `sf`.
+The coordinate reference system can be inspected with `sf`.
 
 ```{r}
 st_crs(loc_sg)
+```
+
+# Search for a place
+
+`dbsn_search()` searches attribute values within an `sf` layer.
+
+Orvinio can be located in the merged `loc_sg` layer with:
+
+```{r}
+orvinio <- dbsn_search(
+  x = loc_sg,
+  pattern = "Orvinio"
+)
+```
+
+The result remains an `sf` object and can therefore be passed directly
+to other `dbsnR` functions.
+
+A study area extending 5 km around Orvinio can be created with:
+
+```{r}
+orvinio_5km <- dbsn_buffer(
+  x = orvinio,
+  distance = 5000
+)
 ```
 
 # Merge all available layers
@@ -190,8 +223,8 @@ sapply(dbsn, nrow)
 
 # Filter features by attributes
 
-`dbsn_filter()` filters the features of an individual `sf` layer while
-preserving its geometry.
+`dbsn_filter()` filters features of an individual `sf` layer while
+preserving geometry.
 
 For example, features belonging only to Rieti can be selected with:
 
@@ -240,8 +273,6 @@ A complete DBSN dataset can contain many layers.
 `dbsn_select()` extracts only the layers required for a particular
 analysis.
 
-For example:
-
 ```{r}
 territory <- dbsn_select(
   x = dbsn,
@@ -275,9 +306,7 @@ analyses.
 
 # Define a study point
 
-A study location can be represented using geographic coordinates.
-
-For example:
+A study location can also be represented using geographic coordinates.
 
 ```{r}
 study_point <- st_sfc(
@@ -294,14 +323,13 @@ The coordinates are specified as:
 longitude, latitude
 ```
 
-In this example, the input coordinates use WGS84 (`EPSG:4326`).
+The input coordinates in this example use WGS84 (`EPSG:4326`).
 
 # Create a study area
 
 `dbsn_buffer()` creates an area around an `sf` or `sfc` spatial object.
 
-For example, a study area extending 20 km around the point can be
-created with:
+A study area extending 20 km around the point can be created with:
 
 ```{r}
 study_area <- dbsn_buffer(
@@ -344,7 +372,7 @@ nrow(loc_sg_crop)
 
 # Crop multiple DBSN layers
 
-`dbsn_crop()` can also operate directly on the named list produced by
+`dbsn_crop()` can also operate directly on a named list produced by
 `dbsn_select()` or `dbsn_merge()`.
 
 ```{r}
@@ -397,7 +425,7 @@ territory_clip <- dbsn_crop(
 This distinction makes it possible to choose between feature selection
 and exact geometric clipping depending on the analysis.
 
-# Cropping with a bounding box
+# Crop with a bounding box
 
 A rectangular area can also be defined directly using longitude and
 latitude.
@@ -426,11 +454,277 @@ loc_sg_bbox <- dbsn_crop(
 The cropping area is automatically transformed to the coordinate
 reference system of the DBSN layer.
 
+# Spatial operations
+
+`dbsnR` provides wrappers for common spatial operations while
+preserving standard `sf` objects.
+
+## Spatial intersection
+
+Features intersecting another spatial object can be obtained with:
+
+```{r}
+objects_intersecting <- dbsn_intersect(
+  loc_sg,
+  study_area
+)
+```
+
+## Spatial join
+
+Attributes from spatially related objects can be combined using:
+
+```{r}
+joined <- dbsn_join(
+  loc_sg,
+  study_area
+)
+```
+
+## Geometric difference
+
+A geometry can be subtracted from another spatial dataset with:
+
+```{r}
+difference <- dbsn_difference(
+  territory_crop$bosco,
+  study_area
+)
+```
+
+## Geometric union
+
+Spatial geometries can be combined with:
+
+```{r}
+combined <- dbsn_union(
+  territory_crop$bosco
+)
+```
+
+These functions complement `dbsn_crop()` when an analysis requires
+topological operations rather than spatial selection alone.
+
+# Corridors along linear features
+
+`dbsn_corridor()` creates a corridor along a linear feature.
+
+For example, a corridor extending 500 m on each side of a road can be
+created with:
+
+```{r}
+road_corridor <- dbsn_corridor(
+  road,
+  distance = 500
+)
+```
+
+Spatial objects can also be selected directly within the corridor.
+
+```{r}
+objects_in_corridor <- dbsn_corridor(
+  road,
+  distance = 500,
+  objects = loc_sg,
+  relation = "intersects"
+)
+```
+
+This can be used to analyse settlements, buildings, archaeological
+features, or other spatial objects located along roads and other linear
+features.
+
+# Nearest features
+
+`dbsn_nearest()` identifies the nearest reference feature for each input
+feature.
+
+```{r}
+nearest <- dbsn_nearest(
+  loc_sg,
+  tr_str
+)
+```
+
+When the actual distance is required, `dbsn_distance()` calculates the
+minimum distance to the nearest reference feature.
+
+```{r}
+distance <- dbsn_distance(
+  x = loc_sg,
+  y = tr_str
+)
+```
+
+The original geometry is preserved and distance information is added to
+the result.
+
+# Locate features along a line
+
+`dbsn_along()` locates spatial features along a reference line.
+
+Features are projected onto the line and their position is calculated
+from the start of the line.
+
+```{r}
+along <- dbsn_along(
+  line = road,
+  objects = loc_sg
+)
+
+along[, c(
+  "distance_m",
+  "distance_km",
+  "distance_pct"
+)]
+```
+
+The function adds three attributes:
+
+- `distance_m`: distance from the start of the line in metres;
+- `distance_km`: distance from the start of the line in kilometres;
+- `distance_pct`: relative position along the line from 0 to 100.
+
+The direction of the reference line determines the origin of the
+measurement: 0 represents the start of the LINESTRING and 100 represents
+its end.
+
+# Spatial measurements
+
+Linear feature lengths can be calculated with `dbsn_length()`.
+
+```{r}
+roads_length <- dbsn_length(
+  tr_str
+)
+```
+
+Measurements in metres and kilometres are added to the result.
+
+Polygon areas can be calculated with `dbsn_area()`.
+
+```{r}
+forest_area <- dbsn_area(
+  bosco
+)
+```
+
+The original geometry is preserved together with the calculated
+measurements.
+
+# Contour lines
+
+DBSN contour lines are stored in the `cv_liv` layer.
+
+They can be merged across the study provinces in the same way as other
+DBSN layers.
+
+```{r}
+cv_liv <- dbsn_merge(
+  layer = "cv_liv",
+  province = provinces
+)
+```
+
+The elevation associated with each contour line is stored in
+`cv_liv_q`.
+
+For a local analysis, only contour lines around Orvinio can be retained.
+
+```{r}
+cv_orvinio <- dbsn_intersect(
+  cv_liv,
+  orvinio_5km
+)
+```
+
+Restricting large line datasets to the study area before interactive
+visualisation improves map responsiveness and avoids unnecessarily
+rendering features outside the area of interest.
+
+# Interactive maps
+
+Individual DBSN layers can be displayed with `dbsn_map()`.
+
+```{r}
+dbsn_map(
+  orvinio,
+  basemap = "topo",
+  hover = "loc_sg_top"
+)
+```
+
+The function automatically handles point, line, and polygon geometries.
+
+Spatial features can also be coloured according to a numeric or
+categorical attribute.
+
+For example, the contour lines around Orvinio can be coloured according
+to elevation.
+
+```{r}
+dbsn_map(
+  cv_orvinio,
+  basemap = "topo",
+  color_by = "cv_liv_q",
+  hover = "cv_liv_q"
+)
+```
+
+Numeric attributes use a continuous colour scale, while categorical
+attributes use discrete colours.
+
+# Multiple-layer maps
+
+Several spatial layers can be displayed together using
+`dbsn_map_layers()`.
+
+```{r}
+dbsn_map_layers(
+  cv_orvinio,
+  orvinio,
+  orvinio_5km,
+  basemap = "topo",
+  layer_names = c(
+    "Contour lines",
+    "Orvinio",
+    "5 km buffer"
+  ),
+  colors = c(
+    "#8C510A",
+    "#E31A1C",
+    "#2166AC"
+  )
+)
+```
+
+Each spatial object is added as an independent Leaflet layer and can be
+shown or hidden using the layer control.
+
+This makes it possible to combine DBSN thematic data, analysis results,
+buffers, corridors, and study-area boundaries in a single interactive
+map.
+
+# Summarise a layer
+
+A compact summary of a DBSN layer can be generated using
+`dbsn_summary()`.
+
+```{r}
+dbsn_summary(
+  loc_sg,
+  layer = "loc_sg"
+)
+```
+
+This provides a quick overview of the spatial dataset before subsequent
+analysis or export.
+
 # Export spatial layers
 
 The final dataset can be exported using `dbsn_export()`.
 
-A named list of `sf` objects is written to a single GeoPackage, with
+A named list of `sf` objects can be written to a single GeoPackage, with
 each list element becoming a separate GeoPackage layer.
 
 ```{r}
@@ -440,8 +734,8 @@ dbsn_export(
 )
 ```
 
-The resulting GeoPackage can be opened directly in GIS software such
-as QGIS.
+The resulting GeoPackage can be opened directly in GIS software such as
+QGIS.
 
 Existing files are protected by default.
 
@@ -464,36 +758,10 @@ dbsn_export(
   layer = "loc_sg"
 )
 ```
-## Locate features along a line
 
-`dbsn_along()` locates spatial features along a reference line. Features are
-projected onto the line and their position is calculated from the start of
-the line.
-
-```{r, eval=FALSE}
-along <- dbsn_along(
-  line = road,
-  objects = loc_sg
-)
-
-along[, c(
-  "distance_m",
-  "distance_km",
-  "distance_pct"
-)]
-```
-
-The function adds three attributes:
-
-- `distance_m`: distance from the start of the line in metres;
-- `distance_km`: distance from the start of the line in kilometres;
-- `distance_pct`: relative position along the line from 0 to 100.
-
-The direction of the reference line determines the origin of the measurement:
-0 represents the start of the LINESTRING and 100 represents its end.
 # Complete workflow
 
-The complete workflow can be written compactly as follows.
+A complete `dbsnR` workflow can be written compactly as follows.
 
 ```{r}
 library(dbsnR)
@@ -512,92 +780,130 @@ provinces <- c(
   "VT"
 )
 
-# Merge DBSN data
+# Merge settlement/locality layer
 
-dbsn <- dbsn_merge(
+loc_sg <- dbsn_merge(
+  layer = "loc_sg",
   province = provinces
 )
 
-# Select thematic layers
+# Locate Orvinio
 
-territory <- dbsn_select(
-  x = dbsn,
-  layers = c(
-    "loc_sg",
-    "edifc",
-    "tr_str",
-    "el_vms",
-    "bosco",
-    "cl_agr",
-    "scarpt"
+orvinio <- dbsn_search(
+  x = loc_sg,
+  pattern = "Orvinio"
+)
+
+# Create a 5 km study area
+
+orvinio_5km <- dbsn_buffer(
+  x = orvinio,
+  distance = 5000
+)
+
+# Merge contour lines
+
+cv_liv <- dbsn_merge(
+  layer = "cv_liv",
+  province = provinces
+)
+
+# Select contour lines in the study area
+
+cv_orvinio <- dbsn_intersect(
+  cv_liv,
+  orvinio_5km
+)
+
+# Display contour lines by elevation
+
+dbsn_map(
+  cv_orvinio,
+  basemap = "topo",
+  color_by = "cv_liv_q",
+  hover = "cv_liv_q"
+)
+
+# Display multiple spatial layers
+
+dbsn_map_layers(
+  cv_orvinio,
+  orvinio,
+  orvinio_5km,
+  basemap = "topo",
+  layer_names = c(
+    "Contour lines",
+    "Orvinio",
+    "5 km buffer"
+  ),
+  colors = c(
+    "#8C510A",
+    "#E31A1C",
+    "#2166AC"
   )
 )
 
-# Define study point
+# Export results
 
-study_point <- st_sfc(
-  st_point(
-    c(12.9, 42.13)
-  ),
-  crs = 4326
+results <- list(
+  orvinio = orvinio,
+  study_area = orvinio_5km,
+  contour_lines = cv_orvinio
 )
-
-# Create 20 km study area
-
-study_area <- dbsn_buffer(
-  x = study_point,
-  distance = 20000
-)
-
-# Crop selected DBSN layers
-
-territory_crop <- dbsn_crop(
-  x = territory,
-  area = study_area
-)
-
-# Inspect result
-
-sapply(territory_crop, nrow)
-
-# Export to GeoPackage
 
 dbsn_export(
-  x = territory_crop,
-  file = "study_area_dbsn.gpkg"
+  x = results,
+  file = "orvinio_dbsn.gpkg"
 )
 ```
 
 # Workflow overview
 
-The principal `dbsnR` spatial workflow is therefore:
+The principal `dbsnR` workflow is:
 
 ```text
 dbsn_download()
        |
        v
-dbsn_layers()
+Cache
        |
        v
-dbsn_info()
+dbsn_layers() / dbsn_info()
        |
        v
 dbsn_merge()
        |
        v
-dbsn_filter() / dbsn_select()
+dbsn_search() / dbsn_filter() / dbsn_select()
        |
        v
-dbsn_buffer()
+dbsn_buffer() / dbsn_crop() / dbsn_corridor()
        |
        v
-dbsn_crop()
+dbsn_intersect() / dbsn_join()
+dbsn_difference() / dbsn_union()
+       |
+       v
+dbsn_nearest() / dbsn_distance() / dbsn_along()
+       |
+       v
+dbsn_length() / dbsn_area()
+       |
+       v
+dbsn_summary()
+       |
+       v
+dbsn_map() / dbsn_map_layers()
        |
        v
 dbsn_export()
 ```
 
 This workflow makes it possible to move from provincial DBSN
-geodatabases stored in the local cache to a compact spatial dataset
-containing only the thematic layers and geographic area required for
-an analysis.
+geodatabases to a reproducible spatial analysis covering data
+acquisition, caching, thematic selection, spatial processing,
+measurement, interactive visualisation, and export.
+
+All major processing functions return standard `sf` objects whenever
+possible, allowing `dbsnR` results to be used directly with `sf`,
+`dplyr`, `ggplot2`, `leaflet`, QGIS, and other spatial tools.

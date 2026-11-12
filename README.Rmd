@@ -265,6 +265,57 @@ dbsn_summary(
   layer = "loc_sg"
 )
 ```
+## Interactive mapping
+
+DBSN spatial layers can be displayed on interactive Leaflet maps using
+`dbsn_map()`.
+
+The function automatically supports point, line, and polygon geometries.
+
+```{r}
+dbsn_map(
+  loc_sg,
+  basemap = "topo",
+  hover = "loc_sg_top"
+)
+```
+
+Features can also be coloured using a numeric or categorical attribute.
+
+For example, contour lines can be coloured according to elevation:
+
+```{r}
+dbsn_map(
+  cv_liv,
+  basemap = "topo",
+  color_by = "cv_liv_q",
+  hover = "cv_liv_q"
+)
+```
+
+Multiple spatial layers can be displayed together with `dbsn_map_layers()`:
+
+```{r}
+dbsn_map_layers(
+  cv_orvinio,
+  orvinio,
+  orvinio_5km,
+  basemap = "topo",
+  layer_names = c(
+    "Contour lines",
+    "Orvinio",
+    "5 km buffer"
+  ),
+  colors = c(
+    "#8C510A",
+    "#E31A1C",
+    "#2166AC"
+  )
+)
+```
+
+Each layer can be independently shown or hidden using the Leaflet layer
+control.
 
 ## Export
 
