@@ -23,7 +23,7 @@ You can install the development version of `dbsnR` from GitHub with:
 
 ``` r
 # install.packages("pak")
-pak::pak("filippotani/dbsnR")
+pak::pak("ftdatalab/dbsnR")
 ```
 
 ## Basic workflow
